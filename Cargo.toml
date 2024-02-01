@@ -2,6 +2,7 @@
 name = "audio-tool"
 version = "0.1.0"
 edition = "2021"
+description = "Frequency analysis tool for audio input"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -10,3 +11,8 @@ nannou = "0.19.0"
 nannou_audio = "0.19.0"
 circular-queue = "0.2.6"
 pitch-detection = "0.3.0"
+
+[package.metadata.bundle]
+identifier = "io.github.rikner.audio-tool"
+version = "0.1.0"
+short_description = "Frequency analysis tool for audio input"
