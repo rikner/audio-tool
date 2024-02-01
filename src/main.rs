@@ -1,21 +1,23 @@
-use audio::cpal;
 use circular_queue::CircularQueue;
 
 use nannou::prelude::*;
 use nannou_audio as audio;
 use pitch_detection::detector::mcleod::McLeodDetector;
+use pitch_detection::detector::yin::YINDetector;
 use pitch_detection::detector::PitchDetector;
 use pitch_detection::Pitch;
 use std::sync::{Arc, Mutex};
 
 type AudioQueue = Arc<Mutex<CircularQueue<f32>>>;
 
-const BUFFER_LEN_FRAMES: usize = 1024;
+const BUFFER_LEN_FRAMES: usize = 512;
+const POWER_THRESHOLD: f32 = 2.0;
+const CLARITY_THRESHOLD: f32 = 0.3;
 
 struct Model {
     queue: AudioQueue,
     _stream: audio::Stream<AudioQueue>, // keeps stream alive
-    detector: McLeodDetector<f32>,
+    detector: YINDetector<f32>,
     pitch: Option<Pitch<f32>>,
     sample_rate: u32,
 }
@@ -42,7 +44,7 @@ fn model(_app: &App) -> Model {
 
     let padding: usize = BUFFER_LEN_FRAMES / 2;
 
-    let detector: McLeodDetector<f32> = McLeodDetector::new(BUFFER_LEN_FRAMES, padding);
+    let detector: YINDetector<f32> = YINDetector::new(BUFFER_LEN_FRAMES, padding);
 
     Model {
         detector,
@@ -70,9 +72,12 @@ fn update(_app: &App, model: &mut Model, _update: Update) {
         .map(|&x| x.to_owned())
         .collect::<Vec<f32>>();
 
-    let pitch = model
-        .detector
-        .get_pitch(&signal, model.sample_rate as usize, 2.0, 0.3);
+    let pitch = model.detector.get_pitch(
+        &signal,
+        model.sample_rate as usize,
+        POWER_THRESHOLD,
+        CLARITY_THRESHOLD,
+    );
 
     model.pitch = pitch
 }
@@ -80,6 +85,7 @@ fn update(_app: &App, model: &mut Model, _update: Update) {
 fn view(app: &App, model: &Model, frame: Frame) {
     let draw = app.draw();
     let boundary = app.window_rect();
+
     let binding = model.queue.lock().unwrap();
     let current_audio_data = binding.iter().collect::<Vec<_>>();
 
