@@ -1,5 +1,6 @@
-
-const MUSICAL_NOTES: [&str; 12] = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const MUSICAL_NOTES: [&str; 12] = [
+    "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
+];
 
 pub fn frequency_to_note(freq: f32) -> String {
     let note: i32 = (12.0 * (freq / 440.0).log2()).round() as i32;

@@ -2,19 +2,18 @@ mod tools;
 
 use circular_queue::CircularQueue;
 
-use tools::*;
-use nannou::prelude::*;
+use nannou::{draw, prelude::*};
 use nannou_audio as audio;
 use pitch_detection::detector::mcleod::McLeodDetector;
 use pitch_detection::detector::yin::YINDetector;
 use pitch_detection::detector::PitchDetector;
 use pitch_detection::Pitch;
 use std::sync::{Arc, Mutex};
+use tools::*;
 
-use spectrum_analyzer::{samples_fft_to_spectrum, FrequencyLimit};
-use spectrum_analyzer::windows::hann_window;
 use spectrum_analyzer::scaling::divide_by_N_sqrt;
-
+use spectrum_analyzer::windows::hann_window;
+use spectrum_analyzer::{samples_fft_to_spectrum, FrequencyLimit, FrequencySpectrum};
 
 type AudioQueue = Arc<Mutex<CircularQueue<f32>>>;
 
@@ -31,6 +30,7 @@ struct Model {
     deviation: f32,
     sample_rate: u32,
     power_spectrum: Vec<f32>,
+    frequency_spectrum: FrequencySpectrum,
 }
 
 fn main() {
@@ -66,6 +66,7 @@ fn model(_app: &App) -> Model {
         deviation: 0.0,
         sample_rate,
         power_spectrum: vec![0.0; BUFFER_LEN_FRAMES],
+        frequency_spectrum: FrequencySpectrum::default(),
     }
 }
 
@@ -102,24 +103,29 @@ fn update(_app: &App, model: &mut Model, _update: Update) {
 
     let hann_window = hann_window(&signal);
     // calc spectrum
-    let spectrum_hann_window = samples_fft_to_spectrum(
+    let frequency_spectrum = samples_fft_to_spectrum(
         // (windowed) samples
         &hann_window,
         // sampling rate
         44100,
         // optional frequency limit: e.g. only interested in frequencies 50 <= f <= 150?
-        FrequencyLimit::All,
+        FrequencyLimit::Max(8000.0),
         // optional scale
         Some(&divide_by_N_sqrt),
-    ).unwrap();
+    )
+    .unwrap();
 
-    let power_spectrum = spectrum_hann_window.data().iter().map(|(_, x)| x.val().abs().powf(2.0)).collect::<Vec<f32>>();
+    let power_spectrum = frequency_spectrum
+        .data()
+        .iter()
+        .map(|(_, x)| x.val().abs().powf(2.0))
+        .collect::<Vec<f32>>();
 
     model.pitch = pitch;
     model.musical_note = note_and_deviation.musical_note;
     model.deviation = note_and_deviation.deviation;
     model.power_spectrum = power_spectrum;
-    
+    model.frequency_spectrum = frequency_spectrum;
 }
 
 fn view(app: &App, model: &Model, frame: Frame) {
@@ -132,20 +138,15 @@ fn view(app: &App, model: &Model, frame: Frame) {
     draw.background().rgb(0.07, 0.09, 0.15);
     draw_pitch_and_deviation(&draw, boundary, &model.pitch, model.deviation);
     // draw_wav_form(&draw, boundary, current_audio_data);
-    draw_power_spectrum(&draw, boundary, &model.power_spectrum);
+    // draw_power_spectrum(&draw, boundary, &model.power_spectrum);
+    draw_frequency_spectrum(&draw, boundary, &model.frequency_spectrum);
     draw.to_frame(app, &frame).unwrap();
 }
 
 fn draw_wav_form(draw: &Draw, boundary: geom::Rect, audio_data: Vec<&f32>) {
     // draw each point in the vector to create a wav form
     for (i, sample) in audio_data.iter().enumerate() {
-        let x = map_range(
-            i,
-            0,
-            audio_data.len(),
-            boundary.left(),
-            boundary.right()
-        );
+        let x = map_range(i, 0, audio_data.len(), boundary.left(), boundary.right());
 
         draw.rect()
             .rgb(0.95, 0.55, 0.25)
@@ -154,8 +155,12 @@ fn draw_wav_form(draw: &Draw, boundary: geom::Rect, audio_data: Vec<&f32>) {
     }
 }
 
-
-fn draw_pitch_and_deviation(draw: &Draw, boundary: geom::Rect, pitch: &Option<Pitch<f32>>, deviation: f32) {
+fn draw_pitch_and_deviation(
+    draw: &Draw,
+    boundary: geom::Rect,
+    pitch: &Option<Pitch<f32>>,
+    deviation: f32,
+) {
     let text = match pitch {
         Some(pitch) => frequency_to_note(pitch.frequency),
         None => "".to_string(),
@@ -178,7 +183,7 @@ fn draw_pitch_and_deviation(draw: &Draw, boundary: geom::Rect, pitch: &Option<Pi
     let h = 20.0;
     let y = boundary.top() - 100.0;
     let deviation_meter_rect = geom::Rect::from_x_y_w_h(x_centered, y, w, h);
- 
+
     // draw.rect()
     //     .color(rgba(0.95, 0.55, 0.25, 0.5))
     //     .stroke(rgba(0.95, 0.55, 0.25, 0.5))
@@ -200,6 +205,31 @@ fn draw_pitch_and_deviation(draw: &Draw, boundary: geom::Rect, pitch: &Option<Pi
     //     .stroke_weight(1.0)
     //     .x_y(deviation_meter_needle_x, deviation_meter_rect.y())
     //     .w_h(2.0, deviation_meter_rect.h());
-    
+}
 
+fn draw_frequency_spectrum(draw: &Draw, boundary: geom::Rect, frequency_spectrum: &FrequencySpectrum) {
+    let mut x = boundary.left();
+    let w = boundary.w() / frequency_spectrum.data().len() as f32;
+    for (i, (frequency, amplitude)) in frequency_spectrum.data().iter().enumerate() {
+        let h = map_range(amplitude.val().abs(), 0.0, 0.1, 0.0, boundary.h());
+        draw.rect()
+            .rgb(0.95, 0.55, 0.25)
+            .x_y(x, boundary.bottom())
+            .w_h(w, h);
+        x += w;
+    }
+}
+
+fn draw_power_spectrum(draw: &Draw, boundary: geom::Rect, power_spectrum: &Vec<f32>) {
+    let mut x = boundary.left();
+    let w = boundary.w() / power_spectrum.len() as f32;
+    for &power in power_spectrum.iter() {
+        let h = map_range(power, 0.0, 0.1, 0.0, boundary.h());
+        draw.rect()
+            // .rgb(0.95, 0.55, 0.25)
+            .rgb(0.749, 0.176, 0.635)
+            .x_y(x, boundary.bottom())
+            .w_h(w, h);
+        x += w;
+    }
 }
