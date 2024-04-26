@@ -1,5 +1,7 @@
-use circular_queue::CircularQueue;
+mod tools;
 
+use tools::*;
+use circular_queue::CircularQueue;
 use nannou::prelude::*;
 use nannou_audio as audio;
 use pitch_detection::detector::mcleod::McLeodDetector;
@@ -10,9 +12,9 @@ use std::sync::{Arc, Mutex};
 
 type AudioQueue = Arc<Mutex<CircularQueue<f32>>>;
 
-const BUFFER_LEN_FRAMES: usize = 512;
-const POWER_THRESHOLD: f32 = 2.0;
-const CLARITY_THRESHOLD: f32 = 0.3;
+const BUFFER_LEN_FRAMES: usize = 1024;
+const POWER_THRESHOLD: f32 = 0.1;
+const CLARITY_THRESHOLD: f32 = 0.01;
 
 struct Model {
     queue: AudioQueue,
@@ -79,7 +81,7 @@ fn update(_app: &App, model: &mut Model, _update: Update) {
         CLARITY_THRESHOLD,
     );
 
-    model.pitch = pitch
+    model.pitch = pitch;
 }
 
 fn view(app: &App, model: &Model, frame: Frame) {
@@ -90,7 +92,8 @@ fn view(app: &App, model: &Model, frame: Frame) {
     let current_audio_data = binding.iter().collect::<Vec<_>>();
 
     draw.background().rgb(0.07, 0.09, 0.15);
-    draw_pitch(&draw, boundary, &model.pitch);
+    // draw_pitch(&draw, boundary, &model.pitch);
+    draw_note(&draw, boundary, &model.pitch);
     draw_wav_form(&draw, boundary, current_audio_data);
     draw.to_frame(app, &frame).unwrap();
 }
@@ -111,6 +114,22 @@ fn draw_pitch(draw: &Draw, boundary: geom::Rect, pitch: &Option<Pitch<f32>>) {
     let text = match pitch {
         Some(pitch) => format!("{:.2} Hz", pitch.frequency),
         None => "No pitch detected".to_string(),
+    };
+
+    draw.text(&text)
+        .rgb(0.95, 0.55, 0.25)
+        .font_size(24)
+        .y(boundary.top() - 50.0);
+}
+
+fn draw_note(
+    draw: &Draw,
+    boundary: geom::Rect,
+    pitch: &Option<Pitch<f32>>
+) {
+    let text = match pitch {
+        Some(pitch) => frequency_to_note(pitch.frequency),
+        None => "".to_string(),
     };
 
     draw.text(&text)
