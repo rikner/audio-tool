@@ -66,13 +66,7 @@ fn capture(queue: &mut AudioQueue, buffer: &audio::Buffer) {
 
 fn update(_app: &App, model: &mut Model, _update: Update) {
     let binding = model.queue.lock().unwrap();
-    let current_audio_data = binding.iter().collect::<Vec<_>>();
-
-    // copy current audio data into a Vec<f32>
-    let signal = current_audio_data
-        .iter()
-        .map(|&x| x.to_owned())
-        .collect::<Vec<f32>>();
+    let signal: Vec<f32> = binding.iter().cloned().collect();
 
     let pitch = model.detector.get_pitch(
         &signal,
