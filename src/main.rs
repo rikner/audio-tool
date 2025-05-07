@@ -59,9 +59,24 @@ fn model(_app: &App) -> Model {
 
 fn capture(queue: &mut AudioQueue, buffer: &audio::Buffer) {
     let mut queue = queue.lock().unwrap();
-    for frame in buffer.frames() {
-        queue.push(frame[0]);
+    let channels = buffer.channels();
+
+    match channels {
+        1 => {
+            for frame in buffer.frames() {
+                queue.push(frame[0]);
+            }
+        }
+        2 => {
+            for frame in buffer.frames() {
+                let sample = (frame[0] + frame[1]) / 2.0;
+                queue.push(sample);
+            }
+        }
+        _ => panic!("Unsupported number of channels"),
     }
+
+
 }
 
 fn update(_app: &App, model: &mut Model, _update: Update) {
